@@ -13,11 +13,14 @@ def updatelog(txt, consoleout = False):
             os.rename(path_log, path_archive)
     except:
         print("Log with file....")
-        
-    txt = str(txt)
-    with open(path_log, "a", encoding='UTF-8') as f:
-        f.write(tm_stamp + txt + "\n")
-    if consoleout:
-        col = os.get_terminal_size().columns
-        print(" " * (int(col) - 1), end='\r')     # clear single line
-        print(tm_stamp + txt)
+    
+    try:
+        txt = str(txt)
+        with open(path_log, "a", encoding='UTF-8') as f:
+            f.write(tm_stamp + txt + "\n")
+        if consoleout:
+            col = os.get_terminal_size().columns
+            print(" " * (int(col) - 1), end='\r')     # clear single line
+            print(tm_stamp + txt)
+    except Exception as e:
+        print(e)

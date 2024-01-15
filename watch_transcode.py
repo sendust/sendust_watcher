@@ -1,7 +1,8 @@
 #  Watch and transcode XDCAM50 MXF with 8ch audio
 #  Collaborate with SBS sendAnywhere, SBS NDS
 #  Code managed by sendust..
-#  Last edit : 2024/1/11
+#
+#  2023/1/15    Introduce Queue. worker 1, 2
 #  
 
 
@@ -48,9 +49,9 @@ class encoder:
         self.metadata = metadata
     
     
-    def run(self, str_run):
+    def run(self, str_run, duration = 60):
         updatelog(str_run, True)
-        p = subprocess.run(str_run, stderr=subprocess.STDOUT)
+        p = subprocess.run(str_run, stderr=subprocess.STDOUT, timeout=float(duration))
         #result = p.stdout.decode()
         ret = p.returncode
         updatelog(f'Encoder finished with return code {ret}', True)
@@ -58,25 +59,25 @@ class encoder:
     def image(self):
         duration = 10
         str_ffmpeg = f'ffmpeg -i "{self.infile}" -f lavfi -i sine=r=48000 {self.filter};[1:a]pan=7.1|c0=c0|c1=c0|c2=c0|c3=c0|c4=c0|c5=c0|c6=c0|c7=c0[apan];[apan]channelsplit=channel_layout=7.1" -t {duration} -pix_fmt yuv422p -c:v mpeg2video  -profile:v 0 -level:v 2 -b:v 50000k -maxrate 50000k -minrate 50000k -bufsize 17825792 -mpv_flags strict_gop -flags +ildct+ilme+cgop -top 1 -g 15 -bf 2 -color_primaries 1 -color_trc 1 -colorspace 1 -sc_threshold 1000000000 -c:a pcm_s24le -y "{self.target}"'        
-        self.run(str_ffmpeg)
+        self.run(str_ffmpeg, duration)
         threading.Thread(target=finish_job, args=[self], name="FINISHING").start()
         
     def audio(self):
         duration = self.mediainfo["general"]["Duration"]
         str_ffmpeg = f'ffmpeg -i "{self.infile}"  -f lavfi -i smptehdbars=size=1920x1080:rate=60000/1001 -filter_complex "[1:v]drawbox=color=black@0.4:y=80:width=iw:height=120:t=fill[vbox];[vbox]drawtext=text=SBS_Anywhere_audio_ingest:fontcolor=white:fontsize=100:x=200:y=100{self.filter} -t {duration} -pix_fmt yuv422p -c:v mpeg2video  -profile:v 0 -level:v 2 -b:v 50000k -maxrate 50000k -minrate 50000k -bufsize 17825792 -mpv_flags strict_gop -flags +ildct+ilme+cgop -top 1 -g 15 -bf 2 -color_primaries 1 -color_trc 1 -colorspace 1 -sc_threshold 1000000000 -c:a pcm_s24le -y "{self.target}"'
-        self.run(str_ffmpeg)
+        self.run(str_ffmpeg, duration)
         threading.Thread(target=finish_job, args=[self], name="FINISHING").start()
         
     def video(self):
         duration =  self.mediainfo["general"]["Duration"]
         str_ffmpeg = f'ffmpeg -i "{self.infile}"  -f lavfi -i sine=r=48000 {self.filter};[1:a]pan=7.1|c0=c0|c1=c0|c2=c0|c3=c0|c4=c0|c5=c0|c6=c0|c7=c0[apan];[apan]channelsplit=channel_layout=7.1" -t {duration} -pix_fmt yuv422p -c:v mpeg2video  -profile:v 0 -level:v 2 -b:v 50000k -maxrate 50000k -minrate 50000k -bufsize 17825792 -mpv_flags strict_gop -flags +ildct+ilme+cgop -top 1 -g 15 -bf 2 -color_primaries 1 -color_trc 1 -colorspace 1 -sc_threshold 1000000000 -c:a pcm_s24le -y "{self.target}"'
-        self.run(str_ffmpeg)
+        self.run(str_ffmpeg, duration)
         threading.Thread(target=finish_job, args=[self], name="FINISHING").start()
     
     def videoaudio(self):
         duration = self.mediainfo["general"]["Duration"]
         str_ffmpeg = f'ffmpeg -i "{self.infile}" {self.filter} -t {duration} -c:v mpeg2video  -profile:v 0 -level:v 2 -b:v 50000k -maxrate 50000k -minrate 50000k -bufsize 17825792 -mpv_flags strict_gop -flags +ildct+ilme+cgop -top 1 -g 15 -bf 2 -color_primaries 1 -color_trc 1 -colorspace 1 -sc_threshold 1000000000 -c:a pcm_s24le -y "{self.target}"'
-        self.run(str_ffmpeg)
+        self.run(str_ffmpeg, duration)
         threading.Thread(target=finish_job, args=[self], name="FINISHING").start()
 
 class watchdog:
@@ -106,9 +107,9 @@ class watchdog:
 
 
 def do_gracefully_finish():
-    global wg, loop_main, loop_second
+    global wg, loop_main, loop_encoder
     loop_main = False
-    loop_second = False
+    loop_encoder = False
     wg.stop()
 
 
@@ -130,7 +131,7 @@ def display_time(sec):
 
 def get_age(path):
     (mode, ino, dev, nlink, uid, gid, size, atime, mtime, ctime) = os.stat(path)
-    print(f'{path} of property atime mtime ctime = {atime} {mtime} {ctime}')
+    #print(f'{path} of property atime mtime ctime = {atime} {mtime} {ctime}')
     return time.time() - mtime
 
 
@@ -163,9 +164,11 @@ def smart_move(origin, target): # Check target existence and rename origin while
     try:    
         #os.replace(origin, os.path.join(target, taget_nameonly))
         shutil.move(origin, os.path.join(target, taget_nameonly))
+        return os.path.join(target, taget_nameonly)
     except Exception as e:
         updatelog(f'Fail to move file..  {origin}', True)
         updatelog(e, True)
+        return f'Fail to smart_move {origin}'
 
 def safe_move(origin,target):
     (head, tail) = os.path.split(origin)
@@ -228,7 +231,7 @@ def get_catafilename(source, outputpath):
 
 def get_imagemagickmeta(source):
     binary = os.path.join(os.getcwd(), 'imagemagick\\identify.exe')
-    p=subprocess.run(f'{binary} -verbose "{source}"', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p=subprocess.run(f'{binary} -verbose "{source}"', stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     result = ''
     for eachline in p.stdout.split(b"\n"):
@@ -243,14 +246,15 @@ def get_imagemagickmeta(source):
                 try:
                     linedecode = eachline.strip().decode('ascii')
                 except Exception as e:
+                    linedecode = ''
                     updatelog(e, True)
         result += linedecode + "\n"    
-    updatelog(result, True)
+    #updatelog(result, True)
     return result
 
 def get_exiftoolmeta(source):
     binary = os.path.join(os.getcwd(), 'exiftool\\exiftool.exe')
-    p=subprocess.run(f'{binary} -charset UTF8 -t "{source}"', stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    p=subprocess.run(f'{binary} -charset UTF8 -t "{source}"', stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     
     result = ''
     for eachline in p.stdout.split(b"\n"):
@@ -265,6 +269,7 @@ def get_exiftoolmeta(source):
                 try:
                     linedecode = eachline.strip().decode('ascii')
                 except Exception as e:
+                    linedecode = ''
                     updatelog(e, True)
         result += linedecode + "\n"    
 
@@ -354,8 +359,8 @@ def finish_job(this):
     if (size > 0):
         safe_move(f, args.donefolder)
         updatelog(f'proxy cmd is {cmd_proxy}\n-------  catalog cmd is {cmd_catalog}', True)
-        p1 = subprocess.run(cmd_proxy, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-        p2 = subprocess.run(cmd_catalog, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
+        p1 = subprocess.run(cmd_proxy, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, timeout=float(duration))
+        p2 = subprocess.run(cmd_catalog, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, timeout=float(duration))
         updatelog(f'proxy, catalog encoder finished with return value {p1.returncode}  {p2.returncode}')
         updatelog(f'Try to write xml file... {filename_xml}')
         try:
@@ -414,27 +419,88 @@ def do_encode():
 
 
 
+def do_encode_new():
+    global tmr1, tmr2, loop_encoder, args, queue
+    print("Start encoder loop............................")
+    while loop_encoder:
+        try:
+            file_inqueue = ''
+            #updatelog("Get from queue...", True)
+            file_inqueue = queue.get(timeout=1)
+            tmr1.reset()
+            #updatelog(f'get file name is {file_inqueue}', True)
+        except Exception as e:
+            pass
+
+        if not file_inqueue:
+            continue
+        
+        updatelog(f'There new file in queue... {file_inqueue}')
+        if os.path.isfile(file_inqueue):
+            newfile = smart_move(file_inqueue, args.movefolder)
+            updatelog(f'smart move file.. {file_inqueue} ==> {newfile}', True)
+            media = param_processor()
+            enc = encoder(newfile)
+            enc.set_target(get_mxffilename(newfile, args.finishfolder))
+            enc.set_mediainfo(media.analysis(newfile)) # Analysis first !!
+            enc.set_filter(media.get_filter())  # get filter_complex string
+            
+            if (media.mediainfo["mediatype"] == "nothing"):
+                updatelog("file is not media type..", True)
+                safe_move(newfile, args.errorfolder)
+
+            elif (media.mediainfo["mediatype"] == "image"):
+                updatelog("Processing image file...", True)
+                enc.set_filter(media.param_video["picture"])
+                enc.set_meta(get_exiftoolmeta(newfile))
+                enc.image()
+
+                
+            elif (media.mediainfo["mediatype"] == "audio"):
+                updatelog("Processing audio file...", True)
+                enc.set_filter(media.param_audio[media.mediainfo["audiotype"]])
+                enc.set_meta(get_exiftoolmeta(newfile))
+                enc.audio()
+
+                
+            elif (media.mediainfo["mediatype"] == "video"):
+                updatelog("Processing video file...", True)
+                enc.set_filter(media.param_video[media.mediainfo["videotype"]])
+                enc.set_meta(get_exiftoolmeta(newfile))
+                enc.video()
+
+                
+            elif (media.mediainfo["mediatype"] == "videoaudio"):
+                updatelog("Processing video/audio file...", True)
+                enc.set_meta(get_exiftoolmeta(newfile))
+                enc.videoaudio()
+
+
 updatelog("start application..", True)
 args = argparser()
 tm_start = time.time()
-for k in args.__dict__:
-    if args.__dict__[k] is not None:
-        updatelog(f'args.{k}   --> {args.__dict__[k]}', True)
-        if not os.path.exists(args.__dict__[k]):
-            updatelog(f'{args.__dict__[k]} +++ Path not exist !! ERROR !!', True)
-            exit()
-        else:
-            updatelog(f'{args.__dict__[k]} +++ Path exist !! OK', True)
+for k in [args.watchfolder, args.movefolder, args.finishfolder, args.donefolder, args.errorfolder]:
+    updatelog(f'check folder {k}', True)
+    if not os.path.exists(k):
+        updatelog(f'{k} +++ Path not exist !! ERROR !!', True)
+        exit()
+    else:
+        updatelog(f'{k} +++ Path exist !! OK', True)
 
 
+queue = queue.Queue()
 tmr1 = timer(2)
 tmr2 = timer(2)
 loop_main = True
-loop_second = True
+loop_encoder = True
 
-threading.Thread(target=do_encode, name="loop_second").start()
+w1 = threading.Thread(target=do_encode_new, name="encoder1")
+w2 = threading.Thread(target=do_encode_new, name="encoder2")
+w1.start()
+w2.start()
 
-wg = watchdog(["MainThread", "loop_second", "watchdog"])  # Expected thread names...
+wg = watchdog(["MainThread", "encoder1", "encoder2", "watchdog"])  # Expected thread names...
+#wg = watchdog(["MainThread"])  # Expected thread names...
 wg.start()
 
 
@@ -445,13 +511,15 @@ try:
                 for each in get_filelist(args.watchfolder):
                     age = get_age(each)
                     if (age > 10):
-                        smart_move(each, args.movefolder)
-                        tmr2.reset()
+                        if each not in list(queue.queue):
+                            queue.put(each)
+                            updatelog(f'Put new file in queue {each}', True)
+                            updatelog(f'queue length = {queue.qsize()}', True)
                     else:
                         print(f'Under aged file... {each}')
             except Exception as e:
                 updatelog(e, True)
-        print(f'{display_time(time.time() - tm_start)}/Active thread = {wg.list_thread_name}', end="\r")
+        print(f'{display_time(time.time() - tm_start)}/Th= {wg.list_thread_name} Qn= {queue.qsize()}', end="\r")
         time.sleep(0.2)
 
 except KeyboardInterrupt:

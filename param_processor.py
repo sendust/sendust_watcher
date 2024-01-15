@@ -24,7 +24,7 @@ class param_processor:
         self.param_video["interlace_2997_1920"] = '-filter_complex "[0:v]null'
         self.param_video["interlace_5994_1920"] = '-filter_complex "[0:v]null'
         self.param_video["interlace_2997_1440"] = '-filter_complex "[0:v]scale=1920x1080:interl=1'
-        self.param_video["interlace"] = '-filter_complex "[0:v]yadif=mode=send_field:parity=1:deint=0[vdeint];[vdeint]scale=1920x1080[vsize];[vsize]fps=fps=60000/1001[vfps];[vfps]tinterlace=4'
+        self.param_video["interlace"] = '-filter_complex "[0:v]yadif=mode=send_field:parity=-1:deint=0[vdeint];[vdeint]scale=1920x1080[vsize];[vsize]fps=fps=60000/1001[vfps];[vfps]tinterlace=4'
         self.param_video["picture"] = '-filter_complex "[0:v]scale=1920x1080:force_original_aspect_ratio=decrease[vs];[vs]pad=w=1920:h=1080:x=(ow-iw)/2:y=(oh-ih)/2:color=black[vhd];[vhd]loop=loop=-1:size=1:start=0'
         self.param_video["only_audio"] = '-filter_complex "drawbox=color=black@0.4:y=80:width=iw:height=120:t=fill[vbox];[vbox]drawtext=text="SBS INGEST/AUDIO Playing":fontcolor=white:fontsize=100:x=200:y=100'
 

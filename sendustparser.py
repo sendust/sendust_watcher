@@ -13,8 +13,9 @@ def argparser():
                 '''))
 
     parser.add_argument("--watchfolder", required=True, type=str, default="c:/temp", help="path for watch folder")
-    parser.add_argument("--movefolder", required=True, type=str, default="c:/temp/working", help="path for working folder")
-    parser.add_argument("--finishfolder", required=True, type=str, default="c:/temp/output", help="path for transcoded files")
+    parser.add_argument("--movefolder", required=True, type=str, default="c:/temp/working", help="transcoder working path")
+    parser.add_argument("--finishfolder", required=True, type=str, default="c:/temp/output", help="transcoder target path")
     parser.add_argument("--donefolder", required=True, type=str, default="c:/temp/done", help="path for finished source files")
-    parser.add_argument("--errorfolder", required=False, type=str, default="c:/temp/error", help="path for error files")
+    parser.add_argument("--errorfolder", required=True, type=str, default="c:/temp/error", help="path for error files")
+    parser.add_argument("--timeout", required=False, type=int, default=1800, help="Maximum encoder time(default = 30min)")
     return parser.parse_args()
