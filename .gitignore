@@ -2,7 +2,10 @@
 /__pycache__
 /log
 /imagemagick
+/dist
+/build
 exiftool-12.73.zip
 ImageMagick-7.1.1-26-portable-Q16-HDRI-x64.zip
+ImageMagick-7.1.1-26-portable-Q16-HDRI-x86.zip
 MediaInfo.exe
 LIBCURL.DLL
