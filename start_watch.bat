@@ -1,3 +1,3 @@
-python watch_transcode.py --watchfolder z:\capture\income --movefolder z:\capture\working --finishfolder z:\capture\output --donefolder z:\capture\done --errorfolder z:\capture\error
+python watch_transcode.py --watchfolder d:\media\income --movefolder d:\media\working --finishfolder d:\media\output --donefolder d:\media\done --errorfolder d:\media\error
 pause
 

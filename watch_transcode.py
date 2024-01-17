@@ -48,14 +48,16 @@ class encoder:
     def set_meta(self, metadata):
         self.metadata = metadata
     
-    
     def run(self, str_run, duration = 60):
         updatelog(str_run, True)
-        p = subprocess.run(str_run, stderr=subprocess.STDOUT, timeout=float(duration))
-        #result = p.stdout.decode()
-        ret = p.returncode
-        updatelog(f'Encoder finished with return code {ret}', True)
-    
+        try:
+            p = subprocess.run(str_run, stderr=subprocess.STDOUT, timeout=float(duration))
+            ret = p.returncode
+            updatelog(f'Encoder finished with return code {ret}', True)
+        except Exception as e:
+            updatelog('[Error] detected while run encoder..... ', True)
+            updatelog(e, True)
+            
     def image(self):
         duration = 10
         str_ffmpeg = f'ffmpeg -i "{self.infile}" -f lavfi -i sine=r=48000 {self.filter};[1:a]pan=7.1|c0=c0|c1=c0|c2=c0|c3=c0|c4=c0|c5=c0|c6=c0|c7=c0[apan];[apan]channelsplit=channel_layout=7.1" -t {duration} -pix_fmt yuv422p -c:v mpeg2video  -profile:v 0 -level:v 2 -b:v 50000k -maxrate 50000k -minrate 50000k -bufsize 17825792 -mpv_flags strict_gop -flags +ildct+ilme+cgop -top 1 -g 15 -bf 2 -color_primaries 1 -color_trc 1 -colorspace 1 -sc_threshold 1000000000 -c:a pcm_s24le -y "{self.target}"'        
@@ -244,7 +246,7 @@ def get_imagemagickmeta(source):
             except Exception as e:
                 updatelog(e, True)
                 try:
-                    linedecode = eachline.strip().decode('ascii')
+                    linedecode = eachline.strip().decode('ascii', 'backslashreplace')
                 except Exception as e:
                     linedecode = ''
                     updatelog(e, True)
@@ -267,7 +269,7 @@ def get_exiftoolmeta(source):
             except Exception as e:
                 updatelog(e, True)
                 try:
-                    linedecode = eachline.strip().decode('ascii')
+                    linedecode = eachline.strip().decode('ascii', 'backslashreplace')
                 except Exception as e:
                     linedecode = ''
                     updatelog(e, True)
@@ -296,6 +298,7 @@ def finish_job(this):
         size = file_stats.st_size
     except Exception as e:
         updatelog(f'Error processing file... {filename_mxf}')
+        size = 0
     
     updatelog(f'File size is {size}')
     
@@ -357,7 +360,7 @@ def finish_job(this):
  
   
     if (size > 0):
-        safe_move(f, args.donefolder)
+        safe_move(f, args.donefolder)   # move src to done folder
         updatelog(f'proxy cmd is {cmd_proxy}\n-------  catalog cmd is {cmd_catalog}', True)
         p1 = subprocess.run(cmd_proxy, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, timeout=float(duration))
         p2 = subprocess.run(cmd_catalog, stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, timeout=float(duration))
@@ -366,9 +369,10 @@ def finish_job(this):
         try:
             tree.write(filename_xml, encoding='utf-8', xml_declaration=True)
         except Exception as e:
+            updatelog('[Error] mxf size is zero...', True)
             updatelog(e, True)
     else:
-        safe_move(f, args.errorfolder)
+        safe_move(f, args.errorfolder)  # move src to error folder
 
 def do_encode():
     global tmr2, loop_second, args
@@ -519,7 +523,7 @@ try:
                         print(f'Under aged file... {each}')
             except Exception as e:
                 updatelog(e, True)
-        print(f'{display_time(time.time() - tm_start)}/Th= {wg.list_thread_name} Qn= {queue.qsize()}', end="\r")
+        print(f'{display_time(time.time() - tm_start)}/Th={wg.list_thread_name} Qn=[{queue.qsize()}]', end="\r")
         time.sleep(0.2)
 
 except KeyboardInterrupt:
