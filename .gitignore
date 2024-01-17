@@ -1,7 +1,7 @@
-/exiftool
+/exiftool/*
 /__pycache__
-/log
-/imagemagick
+/log/*
+/imagemagick/*
 /dist
 /build
 exiftool-12.73.zip
